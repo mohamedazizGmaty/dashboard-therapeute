@@ -29,10 +29,14 @@ export default function Dashboard() {
             const nowTime = format(new Date(), 'HH:mm:ss');
             const startOfCurrentWeek = format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Utilisateur non authentifié');
+
             // 1. Fetch Patients Stats
             const { data: patients, error: patientsError } = await supabase
                 .from('patients')
-                .select('id, status, created_at');
+                .select('id, status, created_at')
+                .eq('user_id', user.id);
             if (patientsError) throw patientsError;
 
             const totalPatients = patients?.length || 0;
@@ -47,6 +51,7 @@ export default function Dashboard() {
                 .from('appointments')
                 .select(`id, start_time, end_time, status, type, patient_id, patients (name)`)
                 .eq('date', today)
+                .eq('user_id', user.id)
                 .order('start_time');
             if (apptsError) throw apptsError;
 
@@ -61,7 +66,8 @@ export default function Dashboard() {
                 .from('appointments')
                 .select('id, date, status')
                 .gte('date', startOfMonth)
-                .lte('date', endOfMonth);
+                .lte('date', endOfMonth)
+                .eq('user_id', user.id);
             if (monthError) throw monthError;
 
             setAppointments(monthAppts || []);

@@ -53,7 +53,9 @@ export default function Patients() {
         if (!newName.trim() || !newAge) return;
 
         try {
-            setIsSubmitting(true);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Utilisateur non authentifié');
+
             const { error } = await supabase
                 .from('patients')
                 .insert([{
@@ -61,7 +63,8 @@ export default function Patients() {
                     age: parseInt(newAge),
                     status: 'Nouveau',
                     avatar: '0ea5e9', // default avatar color
-                    last_session: new Date().toISOString()
+                    last_session: new Date().toISOString(),
+                    user_id: user.id
                 }])
                 .select();
 

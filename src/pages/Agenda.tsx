@@ -12,7 +12,7 @@ interface AppointmentType {
     type: string;
     status: string;
     patient_id: string;
-    patients: { name: string };
+    patients: { name: string } | { name: string }[];
 }
 
 export default function Agenda() {
@@ -74,7 +74,9 @@ export default function Agenda() {
         if (!selectedPatientId || !newDate || !newStartTime || !newEndTime) return;
 
         try {
-            setIsSubmitting(true);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Utilisateur non authentifié');
+
             const { error } = await supabase
                 .from('appointments')
                 .insert([{
@@ -83,7 +85,8 @@ export default function Agenda() {
                     start_time: newStartTime,
                     end_time: newEndTime,
                     type: newType,
-                    status: 'Prévu'
+                    status: 'Prévu',
+                    user_id: user.id
                 }]);
 
             if (error) throw error;
@@ -136,7 +139,7 @@ export default function Agenda() {
                         icon={<Clock size={24} />}
                         title="Prochain"
                         value={nextAppt ? nextAppt.start_time.substring(0, 5) : '--:--'}
-                        subtitle={nextAppt?.patients?.name || 'Aucun'}
+                        subtitle={nextAppt ? (Array.isArray(nextAppt.patients) ? nextAppt.patients[0]?.name : nextAppt.patients?.name) || 'Aucun' : 'Aucun'}
                         color="amber"
                     />
                 </section>
@@ -170,13 +173,15 @@ export default function Agenda() {
                                         <span className="text-xs text-slate-500 dark:text-slate-400">{appt.end_time.substring(0, 5)}</span>
                                     </div>
                                     <div className="flex-1">
-                                        <h3 className="font-semibold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{appt.patients?.name || 'Inconnu'}</h3>
+                                        <h3 className="font-semibold text-slate-800 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                            {Array.isArray(appt.patients) ? appt.patients[0]?.name : appt.patients?.name || 'Inconnu'}
+                                        </h3>
                                         <p className="text-sm text-slate-500 dark:text-slate-400">{appt.type}</p>
                                     </div>
                                     <div>
                                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${appt.status === 'Prévu' || appt.status === 'Confirmé' ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-500/20' :
-                                                appt.status === 'Terminé' ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/20' :
-                                                    'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-500/20'
+                                            appt.status === 'Terminé' ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-200 dark:border-indigo-500/20' :
+                                                'bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-500/20'
                                             }`}>
                                             {appt.status}
                                         </span>

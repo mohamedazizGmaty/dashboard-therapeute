@@ -101,12 +101,13 @@ export default function PatientDashboard() {
         if (!newMotorScore || !newDate || !newStressLevel || !id) return;
 
         try {
-            setIsSubmitting(true);
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error('Utilisateur non authentifié');
 
             // 1. Insert Session
             const { data: sessionData, error: sessionError } = await supabase
                 .from('sessions')
-                .insert([{ patient_id: id, date: newDate }])
+                .insert([{ patient_id: id, date: newDate, user_id: user.id }])
                 .select()
                 .single();
 
@@ -750,18 +751,18 @@ function StatusCard({ title, subtitle, icon, active, color, onClick }: {
     );
 }
 
-const CustomTooltip = ({ active, payload, label, unit, colorHex }: any) => {
+function CustomTooltip({ active, payload, label, unit, colorHex }: any) {
     if (active && payload && payload.length) {
         const defaultColor = colorHex || payload[0].stroke || payload[0].fill || '#2563eb';
         return (
             <div className="bg-slate-800 dark:bg-white text-white dark:text-slate-800 p-3 rounded-lg shadow-xl border border-slate-700 dark:border-slate-200 pointer-events-none transition-colors duration-300">
                 <p className="font-medium text-xs text-slate-300 dark:text-slate-500 mb-1">{label}</p>
-                <p className="font-bold text-lg flex items-center gap-2">
+                <div className="font-bold text-lg flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full" style={{ backgroundColor: defaultColor }}></span>
                     {payload[0].value} <span className="text-sm font-normal text-slate-400 dark:text-slate-500">{unit}</span>
-                </p>
+                </div>
             </div>
         );
     }
     return null;
-};
+}
