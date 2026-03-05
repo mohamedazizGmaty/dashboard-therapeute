@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Calendar, Activity, AlertCircle, Bell, ChevronRight, Search, Loader2 } from 'lucide-react';
-import { format, parseISO, startOfWeek, endOfWeek } from 'date-fns';
+import { Users, Calendar, Activity, AlertCircle, Bell, ChevronRight, Loader2 } from 'lucide-react';
+import { format, parseISO, startOfWeek } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
@@ -101,7 +101,7 @@ export default function Dashboard() {
                             <span className="text-slate-500 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest">{format(new Date(), 'EEEE d MMMM, yyyy', { locale: fr })}</span>
                         </div>
                         <h1 className="text-4xl md:text-5xl font-black tracking-tighter text-slate-900 dark:text-white uppercase leading-tight">
-                            Centre de Rééducation <span className="text-blue-600 dark:text-blue-500">Expert</span>
+                            Synapsia <span className="text-blue-600 dark:text-blue-500">Physio</span>
                         </h1>
                         <p className="text-slate-500 dark:text-slate-400 font-medium text-base md:text-lg">
                             Suivi patient de précision et optimisation thérapeutique.

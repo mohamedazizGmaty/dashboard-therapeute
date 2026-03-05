@@ -1,17 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { Outlet, NavLink, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { supabase } from './lib/supabase';
 import {
   Search, Calendar,
   Home, Users, Settings, FileText, Bell,
-  ChevronRight, ChevronLeft, Sun, Moon
+  ChevronRight, ChevronLeft, Sun, Moon, Loader2
 } from 'lucide-react';
 
 export default function App() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const [session, setSession] = useState<any>(null);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     return document.documentElement.classList.contains('dark');
   });
+
+  useEffect(() => {
+    // 1. Check current session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (!session && location.pathname !== '/auth') {
+        navigate('/auth');
+      }
+    });
+
+    // 2. Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (!session) {
+        navigate('/auth');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -36,6 +59,19 @@ export default function App() {
 
   const headerInfo = getPageTitle();
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/auth');
+  };
+
+  if (!session && location.pathname !== '/auth') {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+        <Loader2 className="animate-spin text-blue-500" size={40} />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-slate-950 font-sans text-slate-900 dark:text-slate-100 overflow-hidden transition-colors duration-300">
 
@@ -52,8 +88,8 @@ export default function App() {
         </button>
 
         <div className={`flex items-center mb-10 h-12 overflow-hidden transition-all duration-300 ${isSidebarExpanded ? 'px-2 w-full justify-start' : 'w-12 justify-center'}`}>
-          <img src="/logo-dark.png" alt="Logo" className="dark:hidden h-full max-w-[180px] object-contain object-left" />
-          <img src="/logo-white.png" alt="Logo" className="hidden dark:block h-full max-w-[180px] object-contain object-left" />
+          <img src="/logo-dark.png" alt="Synapsia" className="dark:hidden h-full max-w-[180px] object-contain object-left" />
+          <img src="/logo-white.png" alt="Synapsia" className="hidden dark:block h-full max-w-[180px] object-contain object-left" />
         </div>
 
         <nav className="flex-1 flex flex-col gap-2 w-full mt-2">
@@ -66,13 +102,19 @@ export default function App() {
         <div className="mt-auto flex flex-col gap-4 w-full">
           <SidebarItem to="/settings" icon={<Settings size={22} />} label="Paramètres" expanded={isSidebarExpanded} isButton />
 
-          <div className={`p-2 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-3 transition-all duration-300 ${isSidebarExpanded ? 'justify-start' : 'justify-center border-transparent bg-transparent dark:bg-transparent dark:border-transparent'}`}>
-            <div className={`w-10 h-10 shrink-0 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm cursor-pointer hover:ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-900 transition-all`}>
-              <img src="https://ui-avatars.com/api/?name=Dr+Lemoine&background=0D8ABC&color=fff" alt="Dr Lemoine" className="w-full h-full object-cover" />
+          <div
+            onClick={handleLogout}
+            className={`p-2 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-3 transition-all duration-300 cursor-pointer hover:bg-rose-50 dark:hover:bg-rose-500/10 group ${isSidebarExpanded ? 'justify-start' : 'justify-center border-transparent bg-transparent dark:bg-transparent dark:border-transparent'}`}
+          >
+            <div className={`w-10 h-10 shrink-0 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden border border-slate-200 dark:border-slate-700 shadow-sm transition-all group-hover:ring-2 ring-rose-500`}>
+              <img src={`https://ui-avatars.com/api/?name=${session?.user?.user_metadata?.full_name || 'User'}&background=0D8ABC&color=fff`} alt="User" className="w-full h-full object-cover" />
             </div>
             <div className={`overflow-hidden transition-all duration-300 ${isSidebarExpanded ? 'opacity-100 max-w-[200px]' : 'opacity-0 max-w-0'}`}>
-              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap">Dr. Lemoine</p>
-              <p className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">Physiothérapeute</p>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 whitespace-nowrap group-hover:text-rose-600 transition-colors uppercase tracking-tight">
+                {session?.user?.user_metadata?.full_name?.split(' ')[0] || 'Expert'}
+              </p>
+              <p className="text-[10px] font-black text-rose-500 whitespace-nowrap uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Déconnexion</p>
+              <p className={`text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap group-hover:hidden`}>Physiothérapeute</p>
             </div>
           </div>
         </div>

@@ -8,11 +8,13 @@ import PatientDashboard from './pages/PatientDashboard.tsx'
 import Patients from './pages/Patients.tsx'
 import Agenda from './pages/Agenda.tsx'
 import Rapports from './pages/Rapports.tsx'
+import Auth from './pages/Auth.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <Routes>
+        <Route path="/auth" element={<Auth />} />
         <Route path="/" element={<App />}>
           <Route index element={<Dashboard />} />
           <Route path="patients" element={<Patients />} />
