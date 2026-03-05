@@ -58,10 +58,11 @@ export default function Auth() {
                     <div className="absolute bottom-0 right-0 w-full h-full bg-[radial-gradient(circle_at_70%_70%,rgba(0,0,0,0.2)_0%,transparent_70%)]" />
                 </div>
 
+                <div className="absolute top-12 left-12 z-20 h-24 overflow-hidden">
+                    <img src="/logo-white.png" alt="Synapsia" className="h-full object-contain object-left" />
+                </div>
+
                 <div className="relative z-10 space-y-8">
-                    <div className="h-16 overflow-hidden">
-                        <img src="/logo-white.png" alt="Synapsia" className="h-full object-contain object-left" />
-                    </div>
 
                     <div className="space-y-4">
                         <h1 className="text-6xl font-black text-white tracking-tighter leading-tight uppercase">
