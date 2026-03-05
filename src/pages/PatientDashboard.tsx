@@ -1,22 +1,20 @@
-import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { PlusCircle, TrendingUp, TrendingDown, Minus, ClipboardList } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { PlusCircle, TrendingUp, TrendingDown, Minus, ClipboardList, Loader2, ArrowLeft } from 'lucide-react';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
-
-// --- Mock Data ---
-const initialSessions = [
-    { id: '1', date: '2026-02-01', motorScore: 45, stressLevel: 8 },
-    { id: '2', date: '2026-02-05', motorScore: 50, stressLevel: 7 },
-    { id: '3', date: '2026-02-12', motorScore: 52, stressLevel: 5 },
-    { id: '4', date: '2026-02-19', motorScore: 58, stressLevel: 4 },
-    { id: '5', date: '2026-02-26', motorScore: 65, stressLevel: 3 },
-];
+import { supabase } from '../lib/supabase';
 
 export default function PatientDashboard() {
-    useParams();
-    const [sessions, setSessions] = useState(initialSessions);
+    const { id } = useParams();
+    const navigate = useNavigate();
+
+    const [patient, setPatient] = useState<any>(null);
+    const [sessions, setSessions] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
     const [newMotorScore, setNewMotorScore] = useState<string>('');
     const [newStressLevel, setNewStressLevel] = useState<string>('5');
     const [newDate, setNewDate] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
@@ -28,17 +26,67 @@ export default function PatientDashboard() {
         { id: '3', name: 'Squats assistés', completed: false },
     ]);
 
+    useEffect(() => {
+        if (id) {
+            fetchPatientData();
+        }
+    }, [id]);
+
+    const fetchPatientData = async () => {
+        try {
+            setIsLoading(true);
+
+            // 1. Fetch Patient Details
+            const { data: patientData, error: patientError } = await supabase
+                .from('patients')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (patientError) throw patientError;
+            setPatient(patientData);
+
+            // 2. Fetch Sessions with Motor Performance and Stress Levels
+            const { data: sessionsData, error: sessionsError } = await supabase
+                .from('sessions')
+                .select(`
+                    id,
+                    date,
+                    motor_performance ( score ),
+                    stress_levels ( score )
+                `)
+                .eq('patient_id', id)
+                .order('date', { ascending: true });
+
+            if (sessionsError) throw sessionsError;
+
+            // 3. Format data for charts
+            const formattedSessions = sessionsData?.map((s: any) => ({
+                id: s.id,
+                date: s.date,
+                motorScore: s.motor_performance?.[0]?.score || 0,
+                stressLevel: s.stress_levels?.[0]?.score || 0
+            })) || [];
+
+            setSessions(formattedSessions);
+        } catch (error) {
+            console.error('Error fetching patient data:', error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     // Logic for status indicators
     const latestSession = sessions[sessions.length - 1];
     const previousSession = sessions[sessions.length - 2];
 
-    let calculatedTrend = 'stagnation';
+    let calculatedTrend = 'Stagnation';
     if (latestSession && previousSession) {
-        if (latestSession.motorScore > previousSession.motorScore + 2) calculatedTrend = 'amelioration';
-        else if (latestSession.motorScore < previousSession.motorScore - 2) calculatedTrend = 'fatigue';
+        if (latestSession.motorScore > previousSession.motorScore + 2) calculatedTrend = 'Amélioration';
+        else if (latestSession.motorScore < previousSession.motorScore - 2) calculatedTrend = 'Fatigue';
     }
 
-    const activeTrend = manualTrend !== null ? manualTrend : calculatedTrend;
+    const activeTrend = manualTrend !== null ? manualTrend.toLowerCase() : calculatedTrend.toLowerCase();
 
     const handleTrendClick = (trend: string) => {
         if (manualTrend === trend) {
@@ -48,22 +96,65 @@ export default function PatientDashboard() {
         }
     };
 
-    const handleAddData = (e: React.FormEvent) => {
+    const handleAddData = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newMotorScore || !newDate || !newStressLevel) return;
+        if (!newMotorScore || !newDate || !newStressLevel || !id) return;
 
-        const newSession = {
-            id: Math.random().toString(),
-            date: newDate,
-            motorScore: Number(newMotorScore),
-            stressLevel: Number(newStressLevel)
-        };
+        try {
+            setIsSubmitting(true);
 
-        const updatedSessions = [...sessions, newSession].sort((a, b) =>
-            new Date(a.date).getTime() - new Date(b.date).getTime()
-        );
-        setSessions(updatedSessions);
-        setNewMotorScore('');
+            // 1. Insert Session
+            const { data: sessionData, error: sessionError } = await supabase
+                .from('sessions')
+                .insert([{ patient_id: id, date: newDate }])
+                .select()
+                .single();
+
+            if (sessionError) throw sessionError;
+            const sessionId = sessionData.id;
+
+            // 2. Insert Motor Performance
+            const { error: motorError } = await supabase
+                .from('motor_performance')
+                .insert([{ session_id: sessionId, score: Number(newMotorScore) }]);
+            if (motorError) throw motorError;
+
+            // 3. Insert Stress Level
+            const { error: stressError } = await supabase
+                .from('stress_levels')
+                .insert([{ session_id: sessionId, score: Number(newStressLevel) }]);
+            if (stressError) throw stressError;
+
+            // 4. Determine new status
+            let newStatus = patient?.status || 'Stagnation';
+            if (latestSession) {
+                const newScore = Number(newMotorScore);
+                if (newScore > latestSession.motorScore + 2) newStatus = 'Amélioration';
+                else if (newScore < latestSession.motorScore - 2) newStatus = 'Fatigue';
+                else newStatus = 'Stagnation';
+            }
+
+            // 5. Update Patient Status and Last Session
+            const { error: updateError } = await supabase
+                .from('patients')
+                .update({
+                    status: newStatus,
+                    last_session: newDate
+                })
+                .eq('id', id);
+
+            if (updateError) throw updateError;
+
+            // Reset form and refetch
+            setNewMotorScore('');
+            setNewDate(format(new Date(), 'yyyy-MM-dd'));
+            fetchPatientData();
+
+        } catch (error) {
+            console.error('Error adding session data:', error);
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const chartData = sessions.map(s => ({
@@ -71,9 +162,30 @@ export default function PatientDashboard() {
         formattedDate: format(parseISO(s.date), 'dd MMM', { locale: fr })
     }));
 
+    if (isLoading) {
+        return (
+            <div className="flex-1 overflow-y-auto p-8 flex items-center justify-center">
+                <Loader2 size={40} className="text-blue-500 animate-spin" />
+            </div>
+        );
+    }
+
     return (
         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
             <div className="max-w-7xl mx-auto space-y-8">
+
+                {/* Patient Header */}
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <button onClick={() => navigate('/patients')} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition">
+                            <ArrowLeft size={20} className="text-slate-600 dark:text-slate-300" />
+                        </button>
+                        <div>
+                            <h1 className="text-2xl font-bold text-slate-800 dark:text-slate-100">{patient?.name || 'Dossier Patient'}</h1>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{patient?.age} ans • Suivi depuis {format(new Date(patient?.created_at || new Date()), 'MMM yyyy', { locale: fr })}</p>
+                        </div>
+                    </div>
+                </div>
 
                 {/* Overall Health Indicator */}
                 <section>
@@ -168,10 +280,11 @@ export default function PatientDashboard() {
 
                                 <button
                                     type="submit"
-                                    className="group/btn relative w-full py-4 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-2xl shadow-[0_10px_25px_-5px_rgba(59,130,246,0.4)] transition-all duration-300 flex items-center justify-center gap-3 active:scale-95 overflow-hidden"
+                                    disabled={isSubmitting}
+                                    className="group/btn relative w-full py-4 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-bold rounded-2xl shadow-[0_10px_25px_-5px_rgba(59,130,246,0.4)] transition-all duration-300 flex items-center justify-center gap-3 active:scale-95 overflow-hidden"
                                 >
                                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover/btn:animate-[shimmer_1.5s_infinite]" />
-                                    Enregistrer la séance
+                                    {isSubmitting ? <Loader2 size={20} className="animate-spin" /> : 'Enregistrer la séance'}
                                 </button>
                             </form>
                         </div>
